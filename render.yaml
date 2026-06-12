@@ -1,0 +1,39 @@
+# Render Blueprint — creates the backend service with one click:
+# Render Dashboard -> New -> Blueprint -> select this repo.
+services:
+  - type: web
+    name: amex-receipt-api
+    runtime: node
+    plan: starter            # needs a paid instance: persistent disk + no sleep (cron jobs must keep running)
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: receipt-data
+      mountPath: /data
+      sizeGB: 1               # SQLite db + receipt images; resizable later
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/app.db
+      - key: UPLOADS_DIR
+        value: /data/uploads
+      - key: JWT_SECRET
+        generateValue: true   # Render generates a strong secret
+      - key: JOTFORM_FORM_ID
+        value: "261617924502052"
+      - key: JOTFORM_API_KEY
+        sync: false           # set in dashboard (secret)
+      - key: APP_BASE_URL
+        sync: false           # set to the service URL after first deploy
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        value: "Receipts Bot <receipts@woodstockarts.org>"

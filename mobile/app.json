@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Receipts",
+    "slug": "amex-receipt-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "org.example.receipts",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "org.example.receipts"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Receipts to use the camera to photograph purchase receipts.",
+          "photosPermission": "Allow Receipts to pick receipt photos from your library."
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset"
+    ]
+  }
+}
