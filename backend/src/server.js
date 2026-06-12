@@ -1,7 +1,22 @@
 const express = require('express');
 const cron = require('node-cron');
 const config = require('./config');
-require('./db'); // applies schema on boot
+const { db } = require('./db'); // applies schema on boot
+
+// First-boot bootstrap: create the initial admin from env vars when the user
+// table is empty (safe to leave the vars set afterwards — this never runs again).
+if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+  const count = db.prepare('SELECT COUNT(*) c FROM users').get().c;
+  if (count === 0) {
+    const bcrypt = require('bcryptjs');
+    const { now } = require('./lib');
+    db.prepare(`INSERT INTO users (name, email, password_hash, role, active, created_at, updated_at)
+                VALUES (?, ?, ?, 'admin', 1, ?, ?)`)
+      .run(process.env.ADMIN_NAME || 'Administrator',
+        process.env.ADMIN_EMAIL.toLowerCase(), bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10), now(), now());
+    console.log(`Bootstrapped initial admin: ${process.env.ADMIN_EMAIL}`);
+  }
+}
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
