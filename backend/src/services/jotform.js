@@ -2,7 +2,6 @@
 // outbound forwarding of in-app receipts, inbound polling of direct submissions.
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const config = require('../config');
 const { db, getSetting, setSetting } = require('../db');
 const { now, parseCents, toDateStr } = require('../lib');
@@ -164,11 +163,26 @@ async function forwardReceipt(receiptId) {
       const hit = (subs || []).find((s) => (s.answers?.[map.related_charge]?.answer || '') === marker);
       if (hit) submissionId = String(hit.id);
     }
-    // If lookup fails, syncSubmissions will still claim it later via the
-    // marker (see local-rcpt handling there), so don't mark failed —
+    // Jotform is the system of record for images: once the upload is
+    // confirmed there, record its URL and delete the local buffer copy so
+    // the Render disk stays metadata-only.
+    let imageUrl = null;
+    if (submissionId && receipt.image_path) {
+      const sub = await jfFetch(`/submission/${submissionId}`);
+      const uploaded = sub?.answers?.[map.image]?.answer;
+      if (Array.isArray(uploaded) && uploaded[0]) {
+        imageUrl = uploaded[0];
+        fs.unlink(receipt.image_path, () => {});
+      }
+    }
+    // If the id lookup fails, syncSubmissions will still claim it later via
+    // the marker (see local-rcpt handling there), so don't mark failed —
     // a retry would create a duplicate submission in Jotform.
-    db.prepare(`UPDATE receipts SET jotform_submission_id = ?, jotform_status = 'forwarded', updated_at = ? WHERE id = ?`)
-      .run(submissionId, now(), receiptId);
+    db.prepare(`UPDATE receipts SET jotform_submission_id = ?, jotform_status = 'forwarded',
+                image_url = COALESCE(?, image_url),
+                image_path = CASE WHEN ? IS NOT NULL THEN NULL ELSE image_path END,
+                updated_at = ? WHERE id = ?`)
+      .run(submissionId, imageUrl, imageUrl, now(), receiptId);
   } catch (err) {
     db.prepare(`UPDATE receipts SET jotform_status = 'failed', updated_at = ? WHERE id = ?`).run(now(), receiptId);
     audit.log(null, 'jotform_forward_failed', 'receipt', receiptId, { error: err.message });
@@ -228,14 +242,15 @@ async function syncSubmissions() {
       else if (/^local-tx-(\d+)$/.test(related)) linkedTxId = Number(related.match(/^local-tx-(\d+)$/)[1]);
     }
 
-    const imageAnswer = answerValue(answers, map.image);
-    const imagePath = await downloadImage(imageAnswer);
+    // Images stay hosted in Jotform (system of record); we store the URL only.
+    const imageAnswer = answerValue(answers, map.image) || '';
+    const imageUrl = imageAnswer.split(',').map((s) => s.trim()).find((s) => /^https?:\/\//.test(s)) || null;
 
     const info = db.prepare(`
       INSERT INTO receipts (submitted_by_user_id, jotform_submission_id, jotform_status, merchant_name,
-        amount_cents, transaction_date, category, line_items, image_path, image_sha256, notes,
+        amount_cents, transaction_date, category, line_items, image_url, notes,
         linked_transaction_id, raw_payload, created_at, updated_at)
-      VALUES (?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      VALUES (?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         user ? user.id : null, String(sub.id),
         answerValue(answers, map.merchant),
@@ -248,7 +263,7 @@ async function syncSubmissions() {
           line_item: answerValue(answers, map.line_item),
           program_class: answerValue(answers, map.program_class),
         }),
-        imagePath, imagePath ? sha256File(imagePath) : null,
+        imageUrl,
         answerValue(answers, map.notes),
         linkedTxId, JSON.stringify(sub), now(), now(),
       );
@@ -259,28 +274,15 @@ async function syncSubmissions() {
   return { imported };
 }
 
-async function downloadImage(answer) {
-  if (!answer) return null;
-  const url = String(answer).split(',')[0].trim();
-  if (!/^https?:\/\//.test(url)) return null;
-  try {
-    const { apiKey } = creds();
-    const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`);
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    const ext = (url.split('.').pop() || 'jpg').slice(0, 5).replace(/[^a-z0-9]/gi, '') || 'jpg';
-    const filename = `jf-${crypto.randomBytes(8).toString('hex')}.${ext}`;
-    const dest = path.join(config.uploadsDir, filename);
-    fs.writeFileSync(dest, buf);
-    return dest;
-  } catch {
-    return null;
-  }
+// Proxy a Jotform-hosted image for the authenticated image endpoint.
+async function fetchImage(imageUrl) {
+  const { apiKey } = creds();
+  const res = await fetch(`${imageUrl}${imageUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}`);
+  if (!res.ok) throw new Error(`Jotform image fetch failed (${res.status})`);
+  return {
+    contentType: res.headers.get('content-type') || 'application/octet-stream',
+    buffer: Buffer.from(await res.arrayBuffer()),
+  };
 }
 
-function sha256File(p) {
-  try { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
-  catch { return null; }
-}
-
-module.exports = { configured, refreshFieldMap, getFieldMap, forwardReceipt, retryFailedForwards, syncSubmissions, deriveFieldMap, deriveOptions };
+module.exports = { configured, refreshFieldMap, getFieldMap, forwardReceipt, retryFailedForwards, syncSubmissions, deriveFieldMap, deriveOptions, fetchImage };

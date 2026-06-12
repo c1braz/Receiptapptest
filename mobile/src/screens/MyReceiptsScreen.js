@@ -37,7 +37,7 @@ export default function MyReceiptsScreen() {
         renderItem={({ item: r }) => (
           <Card>
             <View style={{ flexDirection: 'row' }}>
-              {r.image_path ? (
+              {(r.image_path || r.image_url) ? (
                 <Image
                   source={{ uri: api.receipts.imageUrl(r.id), headers: api.receipts.imageHeaders() }}
                   style={{ width: 64, height: 64, borderRadius: 8, marginRight: 12 }}

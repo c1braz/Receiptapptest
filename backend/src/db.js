@@ -127,6 +127,12 @@ CREATE INDEX IF NOT EXISTS idx_receipts_submitter ON receipts(submitted_by_user_
 CREATE INDEX IF NOT EXISTS idx_matches_tx ON matches(transaction_id);
 `);
 
+// Lightweight migrations for columns added after the initial schema.
+const receiptCols = db.prepare(`PRAGMA table_info(receipts)`).all().map((c) => c.name);
+if (!receiptCols.includes('image_url')) {
+  db.exec(`ALTER TABLE receipts ADD COLUMN image_url TEXT`); // Jotform-hosted image (system of record)
+}
+
 const DEFAULT_REMINDER_SCHEDULE = { initial: 0, second: 2, third: 5, escalate: 7, periodic: 7 };
 
 function getSetting(key, fallback = null) {

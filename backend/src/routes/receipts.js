@@ -123,13 +123,23 @@ router.get('/:id', (req, res) => {
 });
 
 // Images only ever served through this authenticated, role-checked endpoint.
-router.get('/:id/image', (req, res) => {
+// Local file = temporary buffer (pre-forward); Jotform URL = system of record.
+router.get('/:id/image', async (req, res) => {
   const receipt = db.prepare('SELECT * FROM receipts WHERE id = ?').get(req.params.id);
   if (!receipt || !canSeeReceipt(req.user, receipt)) return res.status(404).json({ error: 'Receipt not found' });
-  if (!receipt.image_path || !fs.existsSync(receipt.image_path)) {
-    return res.status(404).json({ error: 'No image stored for this receipt' });
+  if (receipt.image_path && fs.existsSync(receipt.image_path)) {
+    return res.sendFile(path.resolve(receipt.image_path));
   }
-  res.sendFile(path.resolve(receipt.image_path));
+  if (receipt.image_url) {
+    try {
+      const { contentType, buffer } = await jotform.fetchImage(receipt.image_url);
+      res.type(contentType).send(buffer);
+    } catch {
+      res.status(502).json({ error: 'Image is stored in Jotform but could not be fetched right now' });
+    }
+    return;
+  }
+  res.status(404).json({ error: 'No image stored for this receipt' });
 });
 
 module.exports = router;

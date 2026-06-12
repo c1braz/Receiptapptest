@@ -49,7 +49,8 @@ router.get('/:id', (req, res) => {
   if (!tx) return;
   const candidates = db.prepare(`
     SELECT m.*, r.merchant_name AS receipt_merchant, r.amount_cents AS receipt_amount_cents,
-           r.transaction_date AS receipt_date, r.category, r.notes, r.image_path IS NOT NULL AS has_image,
+           r.transaction_date AS receipt_date, r.category, r.notes,
+           (r.image_path IS NOT NULL OR r.image_url IS NOT NULL) AS has_image,
            u.name AS submitted_by_name
     FROM matches m JOIN receipts r ON r.id = m.receipt_id
     LEFT JOIN users u ON u.id = r.submitted_by_user_id

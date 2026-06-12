@@ -54,7 +54,8 @@ Timestamps are ISO-8601 UTC.
 | transaction_date | text | |
 | category | text | |
 | line_items | text JSON | wine items / class items selections |
-| image_path | text | local path (S3 key later); served only via authed endpoint |
+| image_path | text | transient local buffer; cleared once forwarded to Jotform |
+| image_url | text | Jotform-hosted image (system of record); proxied via authed endpoint |
 | image_sha256 | text | duplicate-image detection |
 | notes | text | |
 | raw_payload | text JSON | full Jotform submission, survives form edits |
