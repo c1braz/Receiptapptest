@@ -21,6 +21,22 @@ if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+// Friendly landing page — this service is an API; humans usually arrive here
+// by clicking the service URL.
+app.get('/', (req, res) => {
+  res.type('html').send(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+  <body style="font-family:-apple-system,sans-serif;max-width:520px;margin:3rem auto;padding:0 1rem;color:#1c2733">
+    <h2>🧾 Woodstock Arts — Receipt &amp; AMEX Reconciliation API</h2>
+    <p>This server is running normally. It has no web pages — it powers the
+    <b>Receipts mobile app</b> and the email reminder links.</p>
+    <ul>
+      <li>Submit a receipt: <a href="https://form.jotform.com/261617924502052">Jotform receipt form</a></li>
+      <li>Service status: <a href="/api/health">/api/health</a></li>
+    </ul>
+    <p style="color:#687585;font-size:13px">Staff: use the Receipts app on your phone to log in.</p>
+  </body>`);
+});
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
