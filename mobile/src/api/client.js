@@ -1,8 +1,7 @@
 // API client. Point API_BASE_URL at the backend:
-//  - iOS simulator: http://localhost:4000
-//  - physical device on same wifi: http://<your-mac-LAN-ip>:4000
-//  - production: https://your-deployed-backend
-export const API_BASE_URL = 'http://localhost:4000';
+//  - production (default): the Render deployment
+//  - local backend dev: http://localhost:4000 (iOS simulator) or your Mac's LAN IP
+export const API_BASE_URL = 'https://amex-receipt-api.onrender.com';
 
 let authToken = null;
 export function setAuthToken(token) { authToken = token; }
